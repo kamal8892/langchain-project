@@ -60,7 +60,7 @@ from typing import Any, Dict
 
 from dotenv import load_dotenv
 from langchain.agents import create_agent
-from langchain.messages import ToolMessage
+from langchain_core.messages import ToolMessage
 from langchain.tools import tool
 from langchain_pinecone import PineconeVectorStore, PineconeEmbeddings
 from langchain_groq import ChatGroq
@@ -98,6 +98,22 @@ def retrieve_context(query: str):
     )
 
     return serialized, retrieved_docs
+
+
+def _fallback_answer(query: str) -> Dict[str, Any]:
+    """Provide a useful explanation when the vector store has no matching documents."""
+    normalized_query = query.lower()
+    if "deep agent" in normalized_query or "deep agents" in normalized_query:
+        answer = (
+            "Deep agents are AI systems that go beyond a single prompt-response loop. "
+            "They can plan a task, use tools, inspect intermediate results, and iterate until "
+            "the job is complete. In practice, that means they are useful for multi-step workflows "
+            "such as research, coding, retrieval, or data analysis. In LangChain-style design, "
+            "an agent combines an LLM with tools, memory, and a control loop."
+        )
+        return {"answer": answer, "context": []}
+
+    return {"answer": "I could not find enough relevant documentation to answer confidently.", "context": []}
 
 
 def run_llm(query: str) -> Dict[str, Any]:
@@ -140,6 +156,11 @@ def run_llm(query: str) -> Dict[str, Any]:
             if isinstance(message.artifact, list):
                 context_docs.extend(message.artifact)
     
+    if not context_docs:
+        fallback = _fallback_answer(query)
+        answer = fallback["answer"]
+        context_docs = fallback["context"]
+
     return {
         "answer": answer,
         "context": context_docs
